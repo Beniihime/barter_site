@@ -1,0 +1,94 @@
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { getErrorMessage, getProfile, login, logout, register, type UserProfile } from "../api/api";
+
+type RegisterPayload = Parameters<typeof register>[0];
+
+type AuthContextValue = {
+  user: UserProfile | null;
+  loading: boolean;
+  error: string;
+  isModerator: boolean;
+  refresh: () => Promise<void>;
+  signIn: (username: string, password: string) => Promise<void>;
+  signUp: (payload: RegisterPayload) => Promise<void>;
+  signOut: () => Promise<void>;
+  clearError: () => void;
+};
+
+const AuthContext = createContext<AuthContextValue | null>(null);
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  async function refresh() {
+    try {
+      const profile = await getProfile();
+      setUser(profile);
+    } catch {
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void refresh();
+  }, []);
+
+  async function signIn(username: string, password: string) {
+    setError("");
+    try {
+      const profile = await login(username, password);
+      setUser(profile);
+    } catch (err) {
+      const message = getErrorMessage(err);
+      setError(message);
+      throw new Error(message);
+    }
+  }
+
+  async function signUp(payload: RegisterPayload) {
+    setError("");
+    try {
+      const profile = await register(payload);
+      setUser(profile);
+    } catch (err) {
+      const message = getErrorMessage(err);
+      setError(message);
+      throw new Error(message);
+    }
+  }
+
+  async function signOut() {
+    setError("");
+    await logout().catch(() => undefined);
+    setUser(null);
+  }
+
+  const value = useMemo<AuthContextValue>(() => {
+    const role = user?.profile?.role?.name;
+    return {
+      user,
+      loading,
+      error,
+      isModerator: Boolean(user && (role === "moderator" || role === "admin")),
+      refresh,
+      signIn,
+      signUp,
+      signOut,
+      clearError: () => setError(""),
+    };
+  }, [user, loading, error]);
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error("useAuth must be used inside AuthProvider");
+  }
+  return context;
+}
