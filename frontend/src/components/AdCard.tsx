@@ -7,9 +7,11 @@ type Props = {
   onRespond?: (ad: Ad) => void;
   onComplain?: (ad: Ad) => void;
   onMessage?: (ad: Ad) => void;
+  onToggleFavorite?: (ad: Ad) => void;
+  favoriteBusy?: boolean;
 };
 
-export function AdCard({ ad, onRespond, onComplain, onMessage }: Props) {
+export function AdCard({ ad, onRespond, onComplain, onMessage, onToggleFavorite, favoriteBusy }: Props) {
   const image = ad.image || ad.images?.[0]?.image || "https://images.unsplash.com/photo-1511988617509-a57c8a288659?auto=format&fit=crop&w=800&q=80";
 
   return (
@@ -20,7 +22,12 @@ export function AdCard({ ad, onRespond, onComplain, onMessage }: Props) {
     >
       <div className="relative aspect-[4/3] overflow-hidden bg-leaf-50">
         <img className="h-full w-full object-cover" src={image} alt={ad.title} />
-        <button className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full bg-white/90 text-ink shadow-sm">
+        <button
+          className={`absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full shadow-sm transition ${ad.is_favorite ? "bg-red-50 text-red-600" : "bg-white/90 text-ink"}`}
+          disabled={favoriteBusy}
+          onClick={() => onToggleFavorite?.(ad)}
+          type="button"
+        >
           <Heart size={18} />
         </button>
       </div>

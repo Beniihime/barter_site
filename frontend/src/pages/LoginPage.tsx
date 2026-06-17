@@ -1,23 +1,26 @@
 import { Eye, Lock, Mail } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { AuthShell } from "../components/AuthShell";
 import { useAuth } from "../context/AuthContext";
 
 export function LoginPage() {
   const navigate = useNavigate();
-  const { signIn, error } = useAuth();
+  const location = useLocation();
+  const { signIn, error, clearError } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => clearError, [clearError]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
     try {
       await signIn(username, password);
-      navigate("/dashboard");
+      navigate(location.state?.from || "/dashboard", { replace: true });
     } finally {
       setSubmitting(false);
     }

@@ -1,17 +1,23 @@
-import { Link, NavLink } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { Logo } from "./Logo";
 
 const links = [
   ["Главная", "/"],
   ["Объявления", "/catalog"],
-  ["Категории", "/catalog"],
-  ["Как это работает", "/#how"],
-  ["О нас", "/#about"],
+  ["Категории", "/categories"],
+  ["Как это работает", "/how-it-works"],
+  ["О нас", "/about"],
 ];
 
 export function Header() {
   const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  async function handleSignOut() {
+    await signOut();
+    navigate("/");
+  }
 
   return (
     <header className="sticky top-0 z-30 border-b border-black/5 bg-white/86 backdrop-blur-xl">
@@ -29,7 +35,7 @@ export function Header() {
             <Link className="btn btn-ghost px-3 sm:px-4" to="/dashboard">
               {user.profile?.full_name?.split(" ")[0] || user.username}
             </Link>
-            <button className="btn btn-primary px-3 sm:px-4" type="button" onClick={() => void signOut()}>
+            <button className="btn btn-primary px-3 sm:px-4" type="button" onClick={() => void handleSignOut()}>
               Выйти
             </button>
           </div>

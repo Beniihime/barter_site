@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { getErrorMessage, getProfile, login, logout, register, type UserProfile } from "../api/api";
 
 type RegisterPayload = Parameters<typeof register>[0];
@@ -22,7 +22,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  async function refresh() {
+  const refresh = useCallback(async () => {
     try {
       const profile = await getProfile();
       setUser(profile);
@@ -31,13 +31,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
     void refresh();
   }, []);
 
-  async function signIn(username: string, password: string) {
+  const signIn = useCallback(async (username: string, password: string) => {
     setError("");
     try {
       const profile = await login(username, password);
@@ -47,9 +47,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setError(message);
       throw new Error(message);
     }
-  }
+  }, []);
 
-  async function signUp(payload: RegisterPayload) {
+  const signUp = useCallback(async (payload: RegisterPayload) => {
     setError("");
     try {
       const profile = await register(payload);
@@ -59,13 +59,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setError(message);
       throw new Error(message);
     }
-  }
+  }, []);
 
-  async function signOut() {
+  const signOut = useCallback(async () => {
     setError("");
     await logout().catch(() => undefined);
     setUser(null);
-  }
+  }, []);
+
+  const clearError = useCallback(() => setError(""), []);
 
   const value = useMemo<AuthContextValue>(() => {
     const role = user?.profile?.role?.name;
@@ -78,9 +80,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signIn,
       signUp,
       signOut,
-      clearError: () => setError(""),
+      clearError,
     };
-  }, [user, loading, error]);
+  }, [user, loading, error, refresh, signIn, signUp, signOut, clearError]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

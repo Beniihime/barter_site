@@ -1,15 +1,29 @@
-import { ArrowLeft, CheckCircle2, ImagePlus, X } from "lucide-react";
-import { useEffect, useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { createAd, getCategories, getErrorMessage, type Category } from "../api/api";
+import { ArrowLeft, CheckCircle2, ImagePlus, LoaderCircle, X } from "lucide-react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { createAd, getAd, getCategories, getErrorMessage, type Ad, type Category, updateAd, uploadAdImage } from "../api/api";
 import { demoCategories } from "../data/demo";
+
+type UploadPreview = {
+  id: string;
+  file?: File;
+  preview: string;
+  uploaded?: boolean;
+};
 
 export function CreateAdPage() {
   const navigate = useNavigate();
+  const params = useParams();
+  const adId = Number(params.id);
+  const isEditing = Number.isFinite(adId);
+  const uploadsRef = useRef<UploadPreview[]>([]);
   const [categories, setCategories] = useState<Category[]>(demoCategories);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [loading, setLoading] = useState(isEditing);
+  const [uploads, setUploads] = useState<UploadPreview[]>([]);
+  const [existingImages, setExistingImages] = useState<Ad["images"]>([]);
   const [form, setForm] = useState({
     ad_type: "free",
     category: "",
@@ -21,14 +35,75 @@ export function CreateAdPage() {
   });
 
   useEffect(() => {
-    getCategories().then((items) => {
-      setCategories(items.length ? items : demoCategories);
-      if (items[0]) setForm((current) => ({ ...current, category: String(items[0].id) }));
-    }).catch(() => {
-      setCategories(demoCategories);
-      setForm((current) => ({ ...current, category: String(demoCategories[0].id) }));
-    });
+    async function loadInitialData() {
+      try {
+        const categoryItems = await getCategories();
+        const resolvedCategories = categoryItems.length ? categoryItems : demoCategories;
+        setCategories(resolvedCategories);
+        setForm((current) => ({
+          ...current,
+          category: current.category || String(resolvedCategories[0]?.id || ""),
+        }));
+
+        if (isEditing) {
+          const ad = await getAd(adId);
+          setForm({
+            ad_type: ad.ad_type,
+            category: String(ad.category),
+            title: ad.title,
+            description: ad.description,
+            item_condition: ad.item_condition,
+            exchange_request: ad.exchange_request,
+            city: ad.city,
+          });
+          setExistingImages(ad.images || []);
+        }
+      } catch (err) {
+        setError(getErrorMessage(err));
+        setCategories(demoCategories);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    void loadInitialData();
+  }, [adId, isEditing]);
+
+  useEffect(() => {
+    uploadsRef.current = uploads;
+  }, [uploads]);
+
+  useEffect(() => {
+    return () => {
+      uploadsRef.current.forEach((item) => {
+        if (item.file) {
+          URL.revokeObjectURL(item.preview);
+        }
+      });
+    };
   }, []);
+
+  function handleFiles(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files || []).slice(0, Math.max(0, 6 - uploads.length));
+    if (!files.length) return;
+    const nextItems = files.map((file) => ({
+      id: `${file.name}-${file.lastModified}`,
+      file,
+      preview: URL.createObjectURL(file),
+    }));
+    setUploads((current) => [...current, ...nextItems]);
+    event.target.value = "";
+  }
+
+  function removeUpload(id: string) {
+    setUploads((current) => {
+      const item = current.find((entry) => entry.id === id);
+      if (item?.file) {
+        URL.revokeObjectURL(item.preview);
+      }
+      return current.filter((entry) => entry.id !== id);
+    });
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -36,13 +111,21 @@ export function CreateAdPage() {
     setError("");
     setSubmitting(true);
     try {
-      await createAd({
+      const payload = {
         ...form,
         category: Number(form.category),
         ad_type: form.ad_type as "free" | "exchange",
-      });
-      setNotice("Объявление создано и отправлено на модерацию.");
-      window.setTimeout(() => navigate("/dashboard"), 900);
+      };
+      const ad = isEditing
+        ? await updateAd(adId, payload)
+        : await createAd(payload);
+      await Promise.all(
+        uploads
+          .filter((item) => item.file)
+          .map((item) => uploadAdImage(ad.id, item.file as File)),
+      );
+      setNotice(isEditing ? "Изменения сохранены. Объявление отправлено на повторную модерацию." : "Объявление создано и отправлено на модерацию.");
+      window.setTimeout(() => navigate("/dashboard/ads"), 900);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -54,9 +137,12 @@ export function CreateAdPage() {
     <main className="min-h-screen bg-[#fffdf9] px-5 py-8">
       <section className="mx-auto max-w-3xl">
         <div className="mb-7 grid grid-cols-[40px_1fr_40px] items-center">
-          <Link to="/" className="grid h-10 w-10 place-items-center rounded-full hover:bg-leaf-50"><ArrowLeft /></Link>
-          <h1 className="text-center text-2xl font-black">Создание объявления</h1>
+          <Link to={isEditing ? "/dashboard/ads" : "/"} className="grid h-10 w-10 place-items-center rounded-full hover:bg-leaf-50"><ArrowLeft /></Link>
+          <h1 className="text-center text-2xl font-black">{isEditing ? "Редактирование объявления" : "Создание объявления"}</h1>
         </div>
+        {loading ? (
+          <div className="rounded-lg bg-white p-8 text-center font-semibold text-ink/60 shadow-card">Загружаем объявление...</div>
+        ) : (
         <form className="space-y-5 rounded-lg bg-white p-6 shadow-card" onSubmit={handleSubmit}>
           <div>
             <label className="form-label">Тип объявления</label>
@@ -88,22 +174,33 @@ export function CreateAdPage() {
           <div>
             <span className="form-label">Фото</span>
             <div className="grid grid-cols-4 gap-3">
-              <button type="button" className="upload-tile"><ImagePlus /><span>Добавить фото</span></button>
-              {["https://images.unsplash.com/photo-1544022613-e87ca75a784a?auto=format&fit=crop&w=300&q=80", "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=300&q=80", "https://images.unsplash.com/photo-1594223274512-ad4803739b7c?auto=format&fit=crop&w=300&q=80"].map((src) => (
-                <div className="relative aspect-square overflow-hidden rounded-lg" key={src}>
-                  <img src={src} alt="Фото" className="h-full w-full object-cover" />
-                  <button type="button" className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-ink text-white"><X size={14} /></button>
+              <label className="upload-tile cursor-pointer">
+                <ImagePlus />
+                <span>Добавить фото</span>
+                <input accept="image/png,image/jpeg,image/webp" className="hidden" multiple onChange={handleFiles} type="file" />
+              </label>
+              {uploads.map((item) => (
+                <div className="relative aspect-square overflow-hidden rounded-lg" key={item.id}>
+                  <img src={item.preview} alt="Предпросмотр" className="h-full w-full object-cover" />
+                  <button type="button" className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-ink text-white" onClick={() => removeUpload(item.id)}><X size={14} /></button>
+                </div>
+              ))}
+              {existingImages?.map((item) => (
+                <div className="relative aspect-square overflow-hidden rounded-lg" key={item.id}>
+                  <img src={item.image} alt="Загруженное фото" className="h-full w-full object-cover" />
                 </div>
               ))}
             </div>
+            <p className="mt-2 text-xs font-semibold text-ink/50">Можно добавить до 6 новых изображений в форматах JPG, PNG или WEBP.</p>
           </div>
           <label className="block"><span className="form-label">Местоположение</span><input className="field" value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} placeholder="Город" required /></label>
           {notice && <p className="notice notice-success flex items-center gap-2"><CheckCircle2 size={18} />{notice}</p>}
           {error && <p className="notice notice-error">{error}</p>}
           <button className="btn btn-primary h-12 w-full" disabled={submitting} type="submit">
-            {submitting ? "Публикуем..." : "Опубликовать объявление"}
+            {submitting ? <><LoaderCircle className="animate-spin" size={18} />Сохраняем...</> : isEditing ? "Сохранить изменения" : "Опубликовать объявление"}
           </button>
         </form>
+        )}
       </section>
     </main>
   );

@@ -1,5 +1,5 @@
 import { Eye, Lock, Mail, Phone, User } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 import { AuthShell } from "../components/AuthShell";
@@ -7,7 +7,7 @@ import { useAuth } from "../context/AuthContext";
 
 export function RegisterPage() {
   const navigate = useNavigate();
-  const { signUp, error } = useAuth();
+  const { signUp, error, clearError } = useAuth();
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
     firstName: "",
@@ -18,6 +18,8 @@ export function RegisterPage() {
     password: "",
     confirm: "",
   });
+
+  useEffect(() => clearError, [clearError]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

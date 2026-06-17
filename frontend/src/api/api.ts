@@ -9,6 +9,7 @@ export type Category = {
   id: number;
   name: string;
   description: string;
+  active_ads_count?: number;
 };
 
 export type Ad = {
@@ -25,6 +26,7 @@ export type Ad = {
   category: number;
   category_detail?: Category;
   images?: { id: number; image: string }[];
+  is_favorite?: boolean;
   created_at?: string;
   updated_at?: string;
 };
@@ -64,6 +66,16 @@ export type Message = {
   is_read: boolean;
 };
 
+export type MessageThread = {
+  key: string;
+  ad: number;
+  adTitle: string;
+  counterpartId: number;
+  counterpartName: string;
+  lastMessage: Message;
+  unreadCount: number;
+};
+
 export type Complaint = {
   id: number;
   user: string;
@@ -72,6 +84,13 @@ export type Complaint = {
   reason: string;
   status: string;
   moderator_comment: string;
+  created_at: string;
+};
+
+export type Favorite = {
+  id: number;
+  ad: number;
+  ad_detail: Ad;
   created_at: string;
 };
 
@@ -85,8 +104,24 @@ export async function getAds(params?: Record<string, string>) {
   return data;
 }
 
+export async function getAd(id: number) {
+  const { data } = await api.get<Ad>(`ads/${id}/`);
+  return data;
+}
+
 export async function createAd(payload: Partial<Ad>) {
   const { data } = await api.post<Ad>("ads/", payload);
+  return data;
+}
+
+export async function uploadAdImage(adId: number, file: File) {
+  const formData = new FormData();
+  formData.append("image", file);
+  const { data } = await api.post<{ id: number; image: string }>(`ads/${adId}/upload_image/`, formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
   return data;
 }
 
@@ -97,6 +132,20 @@ export async function updateAd(id: number, payload: Partial<Ad>) {
 
 export async function deleteAd(id: number) {
   await api.delete(`ads/${id}/`);
+}
+
+export async function getFavorites() {
+  const { data } = await api.get<Favorite[]>("favorites/");
+  return data;
+}
+
+export async function addFavorite(ad: number) {
+  const { data } = await api.post<Favorite>("favorites/", { ad });
+  return data;
+}
+
+export async function removeFavorite(id: number) {
+  await api.delete(`favorites/${id}/`);
 }
 
 export async function register(payload: {
@@ -122,6 +171,15 @@ export async function logout() {
 
 export async function getProfile() {
   const { data } = await api.get<UserProfile>("users/me/");
+  return data;
+}
+
+export async function updateMyProfile(payload: {
+  full_name?: string;
+  phone?: string;
+  city?: string;
+}) {
+  const { data } = await api.patch<UserProfile["profile"]>("profiles/me/", payload);
   return data;
 }
 
@@ -152,6 +210,11 @@ export async function sendComplaint(ad: number, reason: string) {
 
 export async function getMessages() {
   const { data } = await api.get<Message[]>("messages/");
+  return data;
+}
+
+export async function markMessageRead(id: number) {
+  const { data } = await api.post<Message>(`messages/${id}/mark-read/`);
   return data;
 }
 

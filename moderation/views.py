@@ -4,7 +4,7 @@ from rest_framework.response import Response
 
 from ads.models import Ad
 from ads.serializers import AdSerializer
-from config.permissions import IsModerator
+from config.permissions import IsModerator, IsOwnerOrModerator
 
 from .models import AdModeration, Complaint
 from .serializers import (
@@ -18,8 +18,10 @@ class ComplaintViewSet(viewsets.ModelViewSet):
     serializer_class = ComplaintSerializer
 
     def get_permissions(self):
-        if self.action in {"list", "process"}:
+        if self.action == "process":
             return [IsModerator()]
+        if self.action in {"retrieve", "destroy"}:
+            return [permissions.IsAuthenticated(), IsOwnerOrModerator()]
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):

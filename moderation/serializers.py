@@ -22,6 +22,13 @@ class ComplaintSerializer(serializers.ModelSerializer):
         )
         read_only_fields = ("user", "status", "moderator_comment", "created_at", "updated_at")
 
+    def validate(self, attrs):
+        request = self.context.get("request")
+        ad = attrs.get("ad")
+        if request and ad and ad.user_id == request.user.id:
+            raise serializers.ValidationError("You cannot complain about your own ad.")
+        return attrs
+
 
 class ComplaintProcessSerializer(serializers.ModelSerializer):
     class Meta:

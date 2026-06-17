@@ -1,12 +1,14 @@
 from rest_framework import serializers
 
-from .models import Ad, AdImage, Category, Response
+from .models import Ad, AdImage, Category, Favorite, Response
 
 
 class CategorySerializer(serializers.ModelSerializer):
+    active_ads_count = serializers.IntegerField(read_only=True)
+
     class Meta:
         model = Category
-        fields = ("id", "name", "description")
+        fields = ("id", "name", "description", "active_ads_count")
 
 
 class AdImageSerializer(serializers.ModelSerializer):
@@ -21,6 +23,7 @@ class AdSerializer(serializers.ModelSerializer):
     user_id = serializers.IntegerField(source="user.id", read_only=True)
     category_detail = CategorySerializer(source="category", read_only=True)
     images = AdImageSerializer(many=True, read_only=True)
+    is_favorite = serializers.BooleanField(read_only=True, default=False)
 
     class Meta:
         model = Ad
@@ -38,6 +41,7 @@ class AdSerializer(serializers.ModelSerializer):
             "city",
             "status",
             "images",
+            "is_favorite",
             "created_at",
             "updated_at",
         )
@@ -76,4 +80,22 @@ class ResponseSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("You cannot respond to your own ad.")
         if ad and ad.status != Ad.Status.ACTIVE:
             raise serializers.ValidationError("You can respond only to active ads.")
+        return attrs
+
+
+class FavoriteSerializer(serializers.ModelSerializer):
+    ad_detail = AdSerializer(source="ad", read_only=True)
+
+    class Meta:
+        model = Favorite
+        fields = ("id", "ad", "ad_detail", "created_at")
+        read_only_fields = ("created_at",)
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+        ad = attrs.get("ad")
+        if request and ad and ad.user_id == request.user.id:
+            raise serializers.ValidationError("You cannot add your own ad to favorites.")
+        if ad and ad.status != Ad.Status.ACTIVE:
+            raise serializers.ValidationError("Only active ads can be added to favorites.")
         return attrs

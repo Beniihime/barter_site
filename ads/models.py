@@ -141,3 +141,33 @@ class Response(models.Model):
     def clean(self):
         if self.ad_id and self.user_id and self.ad.user_id == self.user_id:
             raise ValidationError({"user": "You cannot respond to your own ad."})
+
+
+class Favorite(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="favorites",
+    )
+    ad = models.ForeignKey(
+        Ad,
+        on_delete=models.CASCADE,
+        related_name="favorited_by",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "ad"],
+                name="unique_favorite_per_user_ad",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["user", "-created_at"]),
+            models.Index(fields=["ad"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user} favorited {self.ad}"

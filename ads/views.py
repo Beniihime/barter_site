@@ -1,4 +1,4 @@
-from django.db.models import Q
+from django.db.models import Count, Exists, OuterRef, Q
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, MultiPartParser
@@ -6,14 +6,24 @@ from rest_framework.response import Response as ApiResponse
 
 from config.permissions import IsModerator, IsOwnerOrReadOnly
 
-from .models import Ad, Category, Response
-from .serializers import AdImageSerializer, AdSerializer, CategorySerializer, ResponseSerializer
+from .models import Ad, Category, Favorite, Response
+from .serializers import (
+    AdImageSerializer,
+    AdSerializer,
+    CategorySerializer,
+    FavoriteSerializer,
+    ResponseSerializer,
+)
 
 
 class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Category.objects.all()
     serializer_class = CategorySerializer
     permission_classes = [permissions.AllowAny]
+
+    def get_queryset(self):
+        return Category.objects.annotate(
+            active_ads_count=Count("ads", filter=Q(ads__status=Ad.Status.ACTIVE))
+        ).order_by("name")
 
 
 class AdViewSet(viewsets.ModelViewSet):
@@ -22,8 +32,21 @@ class AdViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = Ad.objects.select_related("user", "category").prefetch_related("images")
+        if self.request.user.is_authenticated:
+            favorites = Favorite.objects.filter(user=self.request.user, ad=OuterRef("pk"))
+            queryset = queryset.annotate(is_favorite=Exists(favorites))
+        else:
+            queryset = queryset.annotate(
+                is_favorite=Exists(Favorite.objects.none())
+            )
+
         if self.action == "list":
             queryset = queryset.filter(status=Ad.Status.ACTIVE)
+        elif self.action == "retrieve" and not IsModerator().has_permission(self.request, self):
+            if self.request.user.is_authenticated:
+                queryset = queryset.filter(Q(status=Ad.Status.ACTIVE) | Q(user=self.request.user))
+            else:
+                queryset = queryset.filter(status=Ad.Status.ACTIVE)
 
         category = self.request.query_params.get("category")
         ad_type = self.request.query_params.get("ad_type")
@@ -44,6 +67,14 @@ class AdViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user, status=Ad.Status.MODERATION)
+
+    def perform_update(self, serializer):
+        instance = self.get_object()
+        should_reset_status = (
+            instance.user == self.request.user
+            and not IsModerator().has_permission(self.request, self)
+        )
+        serializer.save(status=Ad.Status.MODERATION if should_reset_status else instance.status)
 
     @action(detail=False, methods=["get"], permission_classes=[permissions.IsAuthenticated])
     def my(self, request):
@@ -81,6 +112,19 @@ class AdViewSet(viewsets.ModelViewSet):
         ad.status = new_status
         ad.save(update_fields=["status", "updated_at"])
         return ApiResponse(self.get_serializer(ad).data)
+
+
+class FavoriteViewSet(viewsets.ModelViewSet):
+    serializer_class = FavoriteSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Favorite.objects.select_related("ad", "ad__category", "ad__user").prefetch_related("ad__images").filter(
+            user=self.request.user
+        )
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
 
 
 class ResponseViewSet(viewsets.ModelViewSet):

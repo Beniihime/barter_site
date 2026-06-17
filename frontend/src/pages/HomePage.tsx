@@ -1,12 +1,22 @@
 import { BookOpen, Camera, HandHeart, PackagePlus, Shirt, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { getCategories, type Category } from "../api/api";
 import { Header } from "../components/Header";
 import { demoCategories } from "../data/demo";
 
 const icons = [Shirt, PackagePlus, HandHeart, BookOpen, Camera, Sparkles];
 
 export function HomePage() {
+  const [categories, setCategories] = useState<Category[]>(demoCategories);
+
+  useEffect(() => {
+    getCategories()
+      .then((items) => setCategories(items.length ? items.slice(0, 6) : demoCategories))
+      .catch(() => setCategories(demoCategories));
+  }, []);
+
   return (
     <div className="min-h-screen bg-cream">
       <Header />
@@ -26,6 +36,7 @@ export function HomePage() {
             <div className="mt-8 flex flex-wrap gap-4">
               <Link to="/create-ad" className="btn btn-primary h-12 px-6">Разместить объявление</Link>
               <Link to="/catalog" className="btn btn-outline h-12 px-6">Найти вещь</Link>
+              <Link to="/how-it-works" className="btn btn-ghost h-12 px-6">Как это работает</Link>
             </div>
           </div>
           <div className="relative min-h-[360px]">
@@ -45,17 +56,32 @@ export function HomePage() {
         <section className="mt-10">
           <h2 className="text-xl font-extrabold text-ink">Популярные категории</h2>
           <div className="mt-5 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
-            {demoCategories.map((category, index) => {
+            {categories.map((category, index) => {
               const Icon = icons[index] || Sparkles;
               return (
-                <Link key={category.id} to="/catalog" className="category-tile">
+                <Link key={category.id} to={`/catalog?category=${category.id}`} className="category-tile">
                   <Icon size={38} strokeWidth={1.8} />
                   <strong>{category.name}</strong>
-                  <span>{category.description}</span>
+                  <span>{category.active_ads_count ?? category.description}</span>
                 </Link>
               );
             })}
           </div>
+        </section>
+
+        <section className="mt-10 grid gap-5 lg:grid-cols-2">
+          <Link to="/about" className="rounded-[24px] bg-white p-6 shadow-card transition hover:-translate-y-1 hover:shadow-soft">
+            <h2 className="text-2xl font-black text-ink">О проекте</h2>
+            <p className="mt-3 max-w-xl leading-7 text-ink/65">
+              Узнайте, зачем создана платформа, какие принципы у сообщества и как устроена модерация.
+            </p>
+          </Link>
+          <Link to="/categories" className="rounded-[24px] bg-white p-6 shadow-card transition hover:-translate-y-1 hover:shadow-soft">
+            <h2 className="text-2xl font-black text-ink">Все категории</h2>
+            <p className="mt-3 max-w-xl leading-7 text-ink/65">
+              Откройте полный список категорий и переходите в каталог уже с готовым фильтром по нужному типу вещей.
+            </p>
+          </Link>
         </section>
       </main>
     </div>
